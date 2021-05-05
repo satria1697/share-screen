@@ -208,8 +208,8 @@ export default defineComponent({
     },
     async createOffer(peerIdentity: string) {
       const offerOptions = {
-        offerToReceiveAudio: 1,
-        offerToReceiveVideo: 0
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: false
       };
       console.log(`creating offer for ${peerIdentity}`);
         const index = this.findIdx(peerIdentity)
