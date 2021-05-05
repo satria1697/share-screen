@@ -52,7 +52,7 @@ export default defineComponent({
       ws: null as WebSocket | null,
       wsConfig: {
         organization: "suite",
-        conpherence: "PHID-CONP-2c6ri7vqzn2vgg6eqzor"
+        conpherence: "PHID-CONP-3g44bsbe2l6xznv54mvn"
       },
       rtcConfig: {
         iceServers: [
@@ -144,6 +144,9 @@ export default defineComponent({
         const pc = new RTCPeerConnection(this.rtcConfig);
         pc.ontrack = this.handleRemoteStream(peerIdentity);
         pc.onicecandidate = this.handleIceCandidate(peerIdentity);
+        // pc.oniceconnectionstatechange = (event: Event) => {
+        //   console.log(event, peerIdentity)
+        // }
         pc.onconnectionstatechange = this.handleConnectionStatus(peerIdentity);
         if (this.main.srcObject) {
           this.main.srcObject.getTracks().forEach(track => {
@@ -172,14 +175,18 @@ export default defineComponent({
     handleRemoteStream(peerIdentity: string) {
       return (event: RTCTrackEvent) => {
         if (event.streams.length && this.main.peerIdentity !== peerIdentity) {
+          console.log("got remote stream", event)
           const remoteStream = new MediaStream();
           event.streams[0].getTracks().forEach((track: MediaStreamTrack) => {
+            if (track.kind === "video")
+              console.log("got video", track)
             track.onended = () => {
               console.log(`this ${track} is ended`)
             }
             remoteStream.addTrack(track);
           });
           const index = this.findIdx(peerIdentity)
+          this.child[index].srcObject = null;
           this.child[index].srcObject = remoteStream;
         }
       };
@@ -209,7 +216,7 @@ export default defineComponent({
     async createOffer(peerIdentity: string) {
       const offerOptions = {
         offerToReceiveAudio: true,
-        offerToReceiveVideo: false
+        offerToReceiveVideo: true
       };
       console.log(`creating offer for ${peerIdentity}`);
         const index = this.findIdx(peerIdentity)
@@ -223,17 +230,18 @@ export default defineComponent({
       from: string;
       data: RTCSessionDescriptionInit;
     }) {
-      await this.initRTC(payload.from, "", false);
-      const index = this.findIdx(payload.from)
-      if (this.child[index]) {
-        await this.child[index].pc?.setRemoteDescription(
-            new RTCSessionDescription(payload.data)
-        );
-        const sessionDescription = await this.child[index].pc?.createAnswer();
-        if (sessionDescription) {
-          await this.child[index]?.pc?.setLocalDescription(sessionDescription);
-          this.sendMessage("answer", sessionDescription, payload.from);
-        }
+      let index = this.findIdx(payload.from)
+      if (index === -1) {
+        await this.initRTC(payload.from, "", false);
+        index = this.findIdx(payload.from)
+      }
+      await this.child[index].pc?.setRemoteDescription(
+          new RTCSessionDescription(payload.data)
+      );
+      const sessionDescription = await this.child[index].pc?.createAnswer();
+      if (sessionDescription) {
+        await this.child[index]?.pc?.setLocalDescription(sessionDescription);
+        this.sendMessage("answer", sessionDescription, payload.from);
       }
     },
     handleAnswer(payload: { from: string; data: RTCSessionDescriptionInit }) {
@@ -287,7 +295,7 @@ export default defineComponent({
       const screenStream = await mediaDevices.getDisplayMedia()
       const videoStream = screenStream.getVideoTracks()[0]
       videoStream.onended = async () => {
-        console.log(`this ${videoStream} is ended`)
+        f(`this ${videoStream} is ended`)
         this.main.srcObject?.removeTrack(this.main.srcObject?.getAudioTracks()[0])
         if (this.share)
           this.main.pc?.removeTrack(this.share)
