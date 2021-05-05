@@ -10,9 +10,10 @@
       </div>
     </div>
     <div class="w-1/2 flex">
-      <div class="flex" v-for="(item, index) in child" :key="index" v-show="item.peerIdentity !== main.peerIdentity">
-        <span>{{index}}</span>
-        <video :srcObject="item.srcObject" controls autoplay></video>
+      <div class="flex flex-col" v-for="(item, index) in child" :key="index" v-show="item.peerIdentity !== main.peerIdentity">
+        <span>{{item.peerIdentity}}</span>
+        <video v-if="item.status === 'connected'" :srcObject="item.srcObject" controls autoplay></video>
+        <div class="py-2 px-3 rounded-md" v-else>{{item.status}}</div>
       </div>
     </div>
   </div>
@@ -42,7 +43,7 @@ export default defineComponent({
       } as MediaStreamConstraints,
       main: {
         srcObject: null,
-        phid: "PHID-USER-l6a2gknezsmy6oewxiqf",
+        phid: "PHID-USER-d3hkbnloohpnvwf2eswe",
         peerIdentity: "",
         pc: null,
         status: "",
@@ -210,9 +211,10 @@ export default defineComponent({
       };
     },
     handleConnectionStatus(peerIdentity: string) {
-      return (event: any) => {
-        if (event.currentTarget.connectionState) {
-          const connectionState = event.currentTarget.connectionState;
+      return (ev: any) => {
+        if (ev.currentTarget.connectionState) {
+          const connectionState = ev.currentTarget.connectionState;
+          console.log(connectionState, peerIdentity)
           const index = this.findIdx(peerIdentity)
           this.child[index].status = connectionState;
         }
@@ -251,7 +253,7 @@ export default defineComponent({
     },
     handleAnswer(payload: { from: string; data: RTCSessionDescriptionInit }) {
       const index = this.findIdx(payload.from)
-      if (index >= 0)
+      if (index > -1)
         this.child[index].pc?.setRemoteDescription(
             new RTCSessionDescription(payload.data)
         );
@@ -266,16 +268,16 @@ export default defineComponent({
         candidate: payload.data.candidate,
         sdpMid: payload.data.id
       });
-      if (index >= 0) this.child[index].pc?.addIceCandidate(candidate);
+      if (index > -1) this.child[index].pc?.addIceCandidate(candidate);
     },
     async handleJoined(payload: {
       data: { peer_id: string; username: string };
     }) {
       const { peer_id: peerIdentity, username } = payload.data;
       const index = this.findIdx(peerIdentity)
-        if (this.child[index]) {
-          this.child[index].phid = username;
-        }
+      if (this.child[index]) {
+        this.child[index].phid = username;
+      }
       await this.initRTC(peerIdentity, username, true);
     },
     handleLeave(payload: { data: { peer_id: string } }) {
@@ -309,6 +311,7 @@ export default defineComponent({
       if (this.main.srcObject)
         this.share = this.main.pc?.addTrack(videoStream, this.main.srcObject)
       for (const ch of this.child) {
+        console.log("ch", ch)
         await this.createOffer(ch.peerIdentity)
       }
     }
