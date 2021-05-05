@@ -207,22 +207,17 @@ export default defineComponent({
       };
     },
     async createOffer(peerIdentity: string) {
+      const offerOptions = {
+        offerToReceiveAudio: 1,
+        offerToReceiveVideo: 0
+      };
       console.log(`creating offer for ${peerIdentity}`);
-      if (peerIdentity === this.main.peerIdentity) {
-        const sessionDescription = await this.main?.pc?.createOffer();
-        if (sessionDescription) {
-          await this.main?.pc?.setLocalDescription(sessionDescription);
-          this.sendMessage("offer", sessionDescription, peerIdentity);
-        }
-      } else {
         const index = this.findIdx(peerIdentity)
-        const sessionDescription = await this.child[index]?.pc?.createOffer();
+        const sessionDescription = await this.child[index]?.pc?.createOffer(offerOptions);
         if (sessionDescription) {
           await this.child[index]?.pc?.setLocalDescription(sessionDescription);
           this.sendMessage("offer", sessionDescription, peerIdentity);
         }
-      }
-
     },
     async handleOffer(payload: {
       from: string;
