@@ -176,16 +176,21 @@ export default defineComponent({
       return (event: RTCTrackEvent) => {
         if (event.streams.length && this.main.peerIdentity !== peerIdentity) {
           console.log("got remote stream", event)
-          const remoteStream = new MediaStream();
+          const index = this.findIdx(peerIdentity)
+          let remoteStream: MediaStream | null = null;
+          if (this.child[index].srcObject) {
+            remoteStream = this.child[index].srcObject
+          } else {
+            remoteStream = new MediaStream()
+          }
           event.streams[0].getTracks().forEach((track: MediaStreamTrack) => {
             if (track.kind === "video")
               console.log("got video", track)
             track.onended = () => {
               console.log(`this ${track} is ended`)
             }
-            remoteStream.addTrack(track);
+            remoteStream?.addTrack(track);
           });
-          const index = this.findIdx(peerIdentity)
           this.child[index].srcObject = null;
           this.child[index].srcObject = remoteStream;
         }
@@ -295,7 +300,7 @@ export default defineComponent({
       const screenStream = await mediaDevices.getDisplayMedia()
       const videoStream = screenStream.getVideoTracks()[0]
       videoStream.onended = async () => {
-        f(`this ${videoStream} is ended`)
+        console.log(`this ${videoStream} is ended`)
         this.main.srcObject?.removeTrack(this.main.srcObject?.getAudioTracks()[0])
         if (this.share)
           this.main.pc?.removeTrack(this.share)
@@ -307,6 +312,14 @@ export default defineComponent({
         await this.createOffer(ch.peerIdentity)
       }
     }
-  }
+  },
+  // watch: {
+  //   child: {
+  //     deep: true,
+  //     handler(val: ERtcData[]) {
+  //       console.log(val[0].srcObject?.getTracks())
+  //     }
+  //   }
+  // }
 })
 </script>
