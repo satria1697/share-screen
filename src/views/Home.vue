@@ -42,7 +42,7 @@ export default defineComponent({
       } as MediaStreamConstraints,
       main: {
         srcObject: null,
-        phid: "PHID-USER-gdhrsigm7vj22qqe5a47",
+        phid: "PHID-USER-l6a2gknezsmy6oewxiqf",
         peerIdentity: "",
         pc: null,
         status: "",
@@ -296,12 +296,13 @@ export default defineComponent({
         this.main.srcObject?.removeTrack(this.main.srcObject?.getAudioTracks()[0])
         if (this.share)
           this.main.pc?.removeTrack(this.share)
-        await this.createOffer(this.main.peerIdentity)
       }
       this.main.srcObject?.addTrack(videoStream)
       if (this.main.srcObject)
         this.share = this.main.pc?.addTrack(videoStream, this.main.srcObject)
-      await this.createOffer(this.main.peerIdentity)
+      for (const ch of this.child) {
+        await this.createOffer(ch.peerIdentity)
+      }
     }
   }
 })
