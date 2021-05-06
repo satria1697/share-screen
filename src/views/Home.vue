@@ -28,6 +28,7 @@ interface ERtcData {
   peerIdentity: string,
   pc: RTCPeerConnection | null,
   status: string,
+  dataChannel: RTCDataChannel | null,
   enabled?: boolean
 }
 
@@ -43,11 +44,12 @@ export default defineComponent({
       } as MediaStreamConstraints,
       main: {
         srcObject: null,
-        phid: "PHID-USER-d3hkbnloohpnvwf2eswe",
+        phid: "PHID-USER-qcotnkxf3rxas2zbvgbf",
         peerIdentity: "",
         pc: null,
         status: "",
-        enabled: false
+        enabled: false,
+        dataChannel: null
       } as ERtcData,
       child: [] as ERtcData[],
       ws: null as WebSocket | null,
@@ -143,23 +145,37 @@ export default defineComponent({
     async initRTC(peerIdentity: string, phid: string, isInitiator: boolean) {
       try {
         const pc = new RTCPeerConnection(this.rtcConfig);
-        pc.ontrack = this.handleRemoteStream(peerIdentity);
-        pc.onicecandidate = this.handleIceCandidate(peerIdentity);
-        // pc.oniceconnectionstatechange = (event: Event) => {
-        //   console.log(event, peerIdentity)
-        // }
-        pc.onconnectionstatechange = this.handleConnectionStatus(peerIdentity);
+        pc.ontrack = (event) => {
+          this.handleRemoteStream(peerIdentity, event)
+        };
+        pc.onicecandidate = (event) => {
+          this.handleIceCandidate(peerIdentity, event)
+        };
+        pc.onconnectionstatechange = (event) => {
+          this.handleConnectionStatus(peerIdentity, event)
+        };
         if (this.main.srcObject) {
           this.main.srcObject.getTracks().forEach(track => {
             if (this.main.srcObject) pc.addTrack(track, this.main.srcObject);
           });
+        }
+        const dataChannel = pc.createDataChannel("side", {
+          negotiated: true,
+          id: 0
+        });
+        dataChannel.onopen = (event) => {
+          this.handleChannelOpen(peerIdentity, event)
+        };
+        dataChannel.onmessage = (event) => {
+          this.handleChannelMessage(event);
         }
         const peerData = {
           srcObject: null,
           phid,
           peerIdentity,
           pc,
-          status: "new"
+          status: "new",
+          dataChannel
         };
         if (phid === this.main.phid) {
           this.main.pc = pc;
@@ -173,52 +189,46 @@ export default defineComponent({
         console.log("error on creating peer", e);
       }
     },
-    handleRemoteStream(peerIdentity: string) {
-      return (event: RTCTrackEvent) => {
-        if (event.streams.length && this.main.peerIdentity !== peerIdentity) {
-          console.log("got remote stream", event)
-          const index = this.findIdx(peerIdentity)
-          let remoteStream: MediaStream | null = null;
-          if (this.child[index].srcObject) {
-            remoteStream = this.child[index].srcObject
-          } else {
-            remoteStream = new MediaStream()
+    handleRemoteStream(peerIdentity: string, event: RTCTrackEvent) {
+      if (event.streams.length && this.main.peerIdentity !== peerIdentity) {
+        console.log("got remote stream", event)
+        const index = this.findIdx(peerIdentity)
+        let remoteStream: MediaStream | null = null;
+        if (this.child[index].srcObject) {
+          remoteStream = this.child[index].srcObject
+        } else {
+          remoteStream = new MediaStream()
+        }
+        event.streams[0].getTracks().forEach((track: MediaStreamTrack) => {
+          if (track.kind === "video")
+            console.log("got video", track)
+          track.onended = () => {
+            console.log(`this ${track} is ended`)
           }
-          event.streams[0].getTracks().forEach((track: MediaStreamTrack) => {
-            if (track.kind === "video")
-              console.log("got video", track)
-            track.onended = () => {
-              console.log(`this ${track} is ended`)
-            }
-            remoteStream?.addTrack(track);
-          });
-          this.child[index].srcObject = null;
-          this.child[index].srcObject = remoteStream;
-        }
-      };
+          remoteStream?.addTrack(track);
+        });
+        this.child[index].srcObject = null;
+        this.child[index].srcObject = remoteStream;
+      }
     },
-    handleIceCandidate(peerIdentity: string) {
-      return (event: any) => {
-        if (event.candidate) {
-          const iceCandidate = event.candidate;
-          const data = {
-            candidate: iceCandidate.candidate,
-            id: iceCandidate.sdpMid,
-            label: iceCandidate.sdpMLineIndex
-          };
-          this.sendMessage("candidate", data, peerIdentity);
-        }
-      };
+    handleIceCandidate(peerIdentity: string, event: RTCPeerConnectionIceEvent) {
+      if (event.candidate) {
+        const iceCandidate = event.candidate;
+        const data = {
+          candidate: iceCandidate.candidate,
+          id: iceCandidate.sdpMid,
+          label: iceCandidate.sdpMLineIndex
+        };
+        this.sendMessage("candidate", data, peerIdentity);
+      }
     },
-    handleConnectionStatus(peerIdentity: string) {
-      return (ev: any) => {
-        if (ev.currentTarget.connectionState) {
-          const connectionState = ev.currentTarget.connectionState;
-          console.log(connectionState, peerIdentity)
-          const index = this.findIdx(peerIdentity)
-          this.child[index].status = connectionState;
-        }
-      };
+    handleConnectionStatus(peerIdentity: string, event: any) {
+      if (event.currentTarget.connectionState) {
+        const connectionState = event.currentTarget.connectionState;
+        console.log(connectionState, peerIdentity)
+        const index = this.findIdx(peerIdentity)
+        this.child[index].status = connectionState;
+      }
     },
     async createOffer(peerIdentity: string) {
       const offerOptions = {
@@ -226,12 +236,12 @@ export default defineComponent({
         offerToReceiveVideo: true
       };
       console.log(`creating offer for ${peerIdentity}`);
-        const index = this.findIdx(peerIdentity)
-        const sessionDescription = await this.child[index]?.pc?.createOffer(offerOptions);
-        if (sessionDescription) {
-          await this.child[index]?.pc?.setLocalDescription(sessionDescription);
-          this.sendMessage("offer", sessionDescription, peerIdentity);
-        }
+      const index = this.findIdx(peerIdentity)
+      const sessionDescription = await this.child[index]?.pc?.createOffer(offerOptions);
+      if (sessionDescription) {
+        await this.child[index]?.pc?.setLocalDescription(sessionDescription);
+        this.sendMessage("offer", sessionDescription, peerIdentity);
+      }
     },
     async handleOffer(payload: {
       from: string;
@@ -283,12 +293,14 @@ export default defineComponent({
     handleLeave(payload: { data: { peer_id: string } }) {
       const { peer_id: peerIdentity } = payload.data;
       const index = this.findIdx(peerIdentity)
-      this.child[index].pc?.close();
-      this.child[index].srcObject?.getTracks().forEach(track => {
-        track.stop();
-      });
-      this.child[index].srcObject = null;
-      this.child.splice(index, 1);
+      if (this.child[index]) {
+        this.child[index].pc?.close();
+        this.child[index].srcObject?.getTracks().forEach(track => {
+          track.stop();
+        });
+        this.child[index].srcObject = null;
+        this.child.splice(index, 1);
+      }
     },
     handleMic() {
       if (this.main.srcObject) {
@@ -296,6 +308,40 @@ export default defineComponent({
             .enabled;
         this.main.enabled = this.main.srcObject.getAudioTracks()[0].enabled
       }
+    },
+    handleChannelOpen(peerIdentity: string, event: any) {
+      const ehlo = JSON.stringify({
+        type: "ehlo",
+        peerId: this.main.peerIdentity,
+        userPHID: this.main.phid
+      });
+      event.currentTarget.send(ehlo);
+      if (peerIdentity === this.main.peerIdentity) {
+        const muted = JSON.stringify({
+          type: "muted",
+          value: true,
+          peerId: this.main.peerIdentity,
+          userPHID: this.main.phid
+        });
+        event.currentTarget.send(muted);
+      }
+    },
+    handleChannelMessage(event: MessageEvent) {
+      if (event.data) {
+        const peerData = JSON.parse(event.data);
+        console.log("channel", peerData)
+        if (peerData.type) {
+          if(peerData.type === "ehlo") {
+            this.identifyPeer(peerData.phid, peerData.peerId);
+          }
+        }
+      }
+    },
+    identifyPeer(phid: string, peerIdentity: string) {
+      const idx = this.findIdx(peerIdentity)
+      console.log("peer", this.child, this.child[idx], peerIdentity, idx)
+      if (this.child[idx])
+        this.child[idx].phid = phid;
     },
     async handleShare() {
       const mediaDevices = navigator.mediaDevices as any
