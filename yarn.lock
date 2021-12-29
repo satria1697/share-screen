@@ -85,10 +85,10 @@
     lodash.merge "^4.6.2"
     lodash.uniq "^4.5.0"
 
-"@types/tailwindcss@^2.0.2":
-  version "2.0.2"
-  resolved "https://registry.yarnpkg.com/@types/tailwindcss/-/tailwindcss-2.0.2.tgz#7757f3821507c149e6bb09a45f1ac99502e77d49"
-  integrity sha512-C6gthGtfP/rDf0GhN6HhgdSGDbpvs0R8LElnSm3jnTPjYt1sCw9ZJ9cR841AsU8cQYiCqB5rzaRAUW6tF19X8Q==
+"@types/tailwindcss@^3.0.0":
+  version "3.0.0"
+  resolved "https://registry.yarnpkg.com/@types/tailwindcss/-/tailwindcss-3.0.0.tgz#2f0daf9a5788d3bc9a83e5fbcab76206e130ae27"
+  integrity sha512-322KvIsPYb5ryo+I60WN2Os7uBkdkc6G6n1SGcQZJAma6bygaOkEFJVWX8yy8wKo5yhnsOHb7L4LyBrcRnN29Q==
 
 "@vitejs/plugin-vue@^1.2.2":
   version "1.2.2"
